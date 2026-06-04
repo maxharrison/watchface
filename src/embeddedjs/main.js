@@ -1,7 +1,7 @@
 import Poco from "commodetto/Poco";
 import Battery from "embedded:sensor/Battery";
-import Health from "embedded:sensor/Health";
 import Location from "embedded:sensor/Location";
+import Message from "pebble/message";
 
 const render = new Poco(screen);
 
@@ -41,14 +41,19 @@ const battery = new Battery({
 });
 batteryPercent = battery.sample().percent;
 
-// ---- Heart Rate (live) ----
-const health = new Health({
-    onSample() {
-        heartRate = this.sample().heartRate ?? 0;
-        drawScreen();
+// ---- Heart Rate (via C health relay -> PKJS -> AppMessage) ----
+const message = new Message({
+    onReadable() {
+        const data = this.read();
+        if (data.has("HEART_RATE_BPM")) {
+            const bpm = data.get("HEART_RATE_BPM");
+            if (bpm > 0) {
+                heartRate = bpm;
+                drawScreen();
+            }
+        }
     }
 });
-heartRate = health.sample().heartRate ?? 0;
 
 // ---- Drawing ----
 function drawScreen(event) {
@@ -151,15 +156,14 @@ function requestLocation() {
     new Location({
         onSample() {
             const s = this.sample();
-            this.close(); // one-shot: close after first reading
+            this.close();
             fetchWeather(s.latitude, s.longitude);
         }
     });
 }
 
 // ---- Events ----
-watch.addEventListener("minutechange", drawScreen);   // fires immediately too
-watch.addEventListener("hourchange", requestLocation); // hourly weather refresh
+watch.addEventListener("minutechange", drawScreen);
+watch.addEventListener("hourchange", requestLocation);
 
-// Fetch weather immediately on startup
 requestLocation();
