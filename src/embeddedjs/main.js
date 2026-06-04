@@ -40,17 +40,6 @@ const battery = new Battery({
 });
 batteryPercent = battery.sample().percent;
 
-// ---- Heart Rate (via C relay -> PKJS -> AppMessage) ----
-// Uses watch.addEventListener("appmessage") — avoids the Message singleton
-// owned by moddableProxy that caused 'single instance only' crashes.
-watch.addEventListener("appmessage", function(event) {
-    const bpm = event?.payload?.HEART_RATE_BPM;
-    if (bpm > 0) {
-        heartRate = bpm;
-        drawScreen();
-    }
-});
-
 // ---- Drawing ----
 function drawScreen(event) {
     const now = event?.date ?? lastDate;
