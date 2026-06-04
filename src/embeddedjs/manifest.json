@@ -3,7 +3,6 @@
 		"$(MODDABLE)/examples/manifest_mod.json"
 	],
 	"modules": {
-		"*": "./main.js",
-		"heartrate": "./heartrate"
+		"*": "./main.js"
 	}
 }
