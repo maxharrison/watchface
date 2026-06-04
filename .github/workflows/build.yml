@@ -51,6 +51,9 @@ jobs:
           pebble kill --emulator emery 2>/dev/null || true
           cat emulator-logs.txt
 
+      - name: Find build outputs
+        run: find build/ -type f | sort || echo "No build directory"
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
