@@ -1,6 +1,5 @@
 import Poco from "commodetto/Poco";
 import Battery from "embedded:sensor/Battery";
-import Health from "embedded:sensor/Health";
 import Location from "embedded:sensor/Location";
 
 const render = new Poco(screen);
@@ -27,7 +26,7 @@ const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun",
 // ---- State ----
 let lastDate = new Date();
 let batteryPercent = 100;
-let heartRate = 0;
+let heartRate = 0;  // updated via AppMessage from C health relay (not yet implemented)
 let weather = null;
 
 const NEXT_EVENT = "15:00 standup"; // calendar placeholder
@@ -40,15 +39,6 @@ const battery = new Battery({
     }
 });
 batteryPercent = battery.sample().percent;
-
-// ---- Heart Rate (live) ----
-const health = new Health({
-    onSample() {
-        heartRate = this.sample().heartRate ?? 0;
-        drawScreen();
-    }
-});
-heartRate = health.sample().heartRate ?? 0;
 
 // ---- Drawing ----
 function drawScreen(event) {
