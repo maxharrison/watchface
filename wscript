@@ -12,5 +12,4 @@ def build(bld):
             'src/c/mdbl.c',
             'src/c/modules/health_relay.c',
         ],
-        js=['src/pkjs/index.js'],
     )
