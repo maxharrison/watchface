@@ -1,12 +1,19 @@
 {
-    "author": "MakeAwesomeHappen",
-    "dependencies": {},
+    "author": "Max Harrison",
+    "dependencies": {
+        "@moddable/pebbleproxy": "^0.1.8"
+    },
     "keywords": [
         "pebble-app"
     ],
-    "name": "watchface-tutorial",
+    "name": "watchface",
     "pebble": {
-        "displayName": "Tutorial Watchface",
+        "capabilities": [
+            "location",
+            "configurable",
+            "health"
+        ],
+        "displayName": "Watchface",
         "enableMultiJS": true,
         "messageKeys": [],
         "projectType": "moddable",
