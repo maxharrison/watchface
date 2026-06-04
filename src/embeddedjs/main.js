@@ -6,8 +6,8 @@ import Message from "pebble/message";
 const render = new Poco(screen);
 
 // ---- Fonts ----
-const timeFont  = new render.Font("Bitham-Bold", 52);
-const smallFont = new render.Font("Gothic-Bold", 22);
+const timeFont  = new render.Font("Bitham-Bold", 42);
+const smallFont = new render.Font("Gothic-Bold", 18);
 
 // ---- Colors (matched to the mockup) ----
 const black   = render.makeColor(0, 0, 0);
