@@ -35,6 +35,24 @@ jobs:
       - name: Build
         run: pebble build
 
+      - name: Install QEMU and virtual display
+        run: sudo apt-get install -y qemu-system-arm xvfb
+
+      - name: Run on emulator and capture logs
+        run: |
+          Xvfb :99 -screen 0 1024x768x24 &
+          export DISPLAY=:99
+          pebble install --emulator emery &
+          INSTALL_PID=$!
+          sleep 15
+          pebble logs --emulator emery 2>&1 | tee emulator-logs.txt &
+          LOGS_PID=$!
+          sleep 20
+          kill $LOGS_PID 2>/dev/null || true
+          kill $INSTALL_PID 2>/dev/null || true
+          pebble kill --emulator emery 2>/dev/null || true
+          cat emulator-logs.txt
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
