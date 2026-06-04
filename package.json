@@ -15,7 +15,7 @@
         ],
         "displayName": "Watchface",
         "enableMultiJS": true,
-        "messageKeys": ["HEART_RATE_BPM"],
+        "messageKeys": [],
         "projectType": "moddable",
         "resources": {
             "media": []
