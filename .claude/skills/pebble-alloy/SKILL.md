@@ -11,7 +11,7 @@ Use this skill when working on Pebble watchfaces written with the **Alloy/Moddab
 | emery    | rect      | 200 × 228  | 64     |
 | gabbro   | round     | 180 × 180  | 64     |
 
-Access at runtime: `render.width`, `render.height` (never hardcode dimensions).
+Access at runtime: `render.width`, `render.height` (never hardcode dimensions). Also available as `screen.width` / `screen.height` globals.
 
 ---
 
@@ -95,7 +95,8 @@ const red   = render.makeColor(255, 0, 0);
 const timeFont  = new render.Font("Bitham-Bold", 42);
 const smallFont = new render.Font("Gothic-Bold", 18);
 
-render.begin();
+render.begin();                          // full-screen redraw
+// render.begin(x, y, w, h);            // partial redraw — only repaint changed region
 
 // Fill background
 render.fillRectangle(black, 0, 0, render.width, render.height);
@@ -364,6 +365,19 @@ render.fillRectangle(barColor, 0, 0, barW, 4);
 
 ---
 
+## XS Engine Limitations
+
+The Moddable XS engine compiles JS to bytecode at build time. These features are **omitted** and will fail:
+- `Proxy`, `Reflect`
+- `WeakMap`, `WeakSet`, `WeakRef`
+- `BigInt`
+- `eval()`
+- Generator functions (`function*`)
+
+Everything else from ES2025 works: classes, async/await, destructuring, optional chaining, nullish coalescing, template literals, modules, `Promise`, `Map`, `Set`, `Symbol`.
+
+---
+
 ## Common Gotchas
 
 - **Always call `render.begin()` before any draw call and `render.end()` after** — skipping either corrupts the display.
@@ -395,9 +409,19 @@ trace("also works: " + value);  // Moddable-native trace
 
 ---
 
+## Performance Tips
+
+- **Partial redraws**: use `render.begin(x, y, w, h)` to only repaint the region that changed (e.g. just the time text area), saving CPU and display power.
+- **Preload fonts and colors** at module scope — `new render.Font(...)` is expensive; never construct inside a draw function.
+- **Cache text widths**: `render.getTextWidth()` called every frame is wasteful for static strings; compute once and store.
+- **minutechange not secondchange**: a second-granularity redraw drains battery significantly.
+- **Stop sensors** (accelerometer, health) when the watchface is not visible (`blur` event).
+
+---
+
 ## TypeScript
 
-TypeScript is supported. Use `.ts` extension, same imports. Type declarations are bundled with the SDK.
+TypeScript is supported. Rename `main.js` → `main.ts`; the build system compiles it automatically. Type declarations ship with the SDK.
 
 ```ts
 import Poco from "commodetto/Poco";
