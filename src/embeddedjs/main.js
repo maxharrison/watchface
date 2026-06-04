@@ -1,7 +1,7 @@
 import Poco from "commodetto/Poco";
 import Battery from "embedded:sensor/Battery";
 import Location from "embedded:sensor/Location";
-import Message from "pebble/message";
+import HeartRate from "heartrate";
 
 const render = new Poco(screen);
 
@@ -41,24 +41,11 @@ const battery = new Battery({
 });
 batteryPercent = battery.sample().percent;
 
-// ---- Heart Rate (via C health relay -> PKJS -> AppMessage) ----
-const message = new Message({
-    onReadable() {
-        const data = this.read();
-        if (data.has("HEART_RATE_BPM")) {
-            const bpm = data.get("HEART_RATE_BPM");
-            if (bpm > 0) {
-                heartRate = bpm;
-                drawScreen();
-            }
-        }
-    }
-});
-
 // ---- Drawing ----
 function drawScreen(event) {
     const now = event?.date ?? lastDate;
     if (event?.date) lastDate = event.date;
+    heartRate = HeartRate.get();  // read latest value from C on each draw
 
     const W = render.width;
     const H = render.height;
