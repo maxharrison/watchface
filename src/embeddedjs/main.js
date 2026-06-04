@@ -1,7 +1,6 @@
 import Poco from "commodetto/Poco";
 import Battery from "embedded:sensor/Battery";
 import Location from "embedded:sensor/Location";
-import HeartRate from "heartrate";
 
 const render = new Poco(screen);
 
@@ -41,11 +40,21 @@ const battery = new Battery({
 });
 batteryPercent = battery.sample().percent;
 
+// ---- Heart Rate (via C relay -> PKJS -> AppMessage) ----
+// Uses watch.addEventListener("appmessage") — avoids the Message singleton
+// owned by moddableProxy that caused 'single instance only' crashes.
+watch.addEventListener("appmessage", function(event) {
+    const bpm = event?.payload?.HEART_RATE_BPM;
+    if (bpm > 0) {
+        heartRate = bpm;
+        drawScreen();
+    }
+});
+
 // ---- Drawing ----
 function drawScreen(event) {
     const now = event?.date ?? lastDate;
     if (event?.date) lastDate = event.date;
-    heartRate = HeartRate.get();  // read latest value from C on each draw
 
     const W = render.width;
     const H = render.height;
