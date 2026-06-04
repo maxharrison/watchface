@@ -6,3 +6,11 @@ def configure(conf):
 
 def build(bld):
     bld.load('pebble_sdk')
+
+    bld.pebble_bundle(
+        sources=[
+            'src/c/mdbl.c',
+            'src/c/modules/health_relay.c',
+        ],
+        js=['src/pkjs/index.js'],
+    )
