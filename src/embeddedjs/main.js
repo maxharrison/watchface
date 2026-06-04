@@ -1,5 +1,6 @@
 import Poco from "commodetto/Poco";
 import Battery from "embedded:sensor/Battery";
+import Health from "embedded:sensor/Health";
 import Location from "embedded:sensor/Location";
 
 const render = new Poco(screen);
@@ -26,10 +27,9 @@ const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun",
 // ---- State ----
 let lastDate = new Date();
 let batteryPercent = 100;
+let heartRate = 0;
 let weather = null;
 
-// Placeholders (no Alloy APIs for these yet)
-const HEART_RATE = 72;            // placeholder
 const NEXT_EVENT = "15:00 standup"; // calendar placeholder
 
 // ---- Battery (live) ----
@@ -40,6 +40,15 @@ const battery = new Battery({
     }
 });
 batteryPercent = battery.sample().percent;
+
+// ---- Heart Rate (live) ----
+const health = new Health({
+    onSample() {
+        heartRate = this.sample().heartRate ?? 0;
+        drawScreen();
+    }
+});
+heartRate = health.sample().heartRate ?? 0;
 
 // ---- Drawing ----
 function drawScreen(event) {
@@ -59,8 +68,8 @@ function drawScreen(event) {
     else if (batteryPercent <= 40) barColor = yellow;
     render.fillRectangle(barColor, 0, 0, ((batteryPercent * W) / 100) | 0, 4);
 
-    // --- Top-left: heart rate, "72" orange + " hr" dim ---
-    const hrVal = String(HEART_RATE);
+    // --- Top-left: heart rate ---
+    const hrVal = heartRate > 0 ? String(heartRate) : "--";
     render.drawText(hrVal, smallFont, orange, pad, 12);
     render.drawText(" hr", smallFont, dim,
         pad + render.getTextWidth(hrVal, smallFont), 12);
@@ -151,3 +160,6 @@ function requestLocation() {
 // ---- Events ----
 watch.addEventListener("minutechange", drawScreen);   // fires immediately too
 watch.addEventListener("hourchange", requestLocation); // hourly weather refresh
+
+// Fetch weather immediately on startup
+requestLocation();
