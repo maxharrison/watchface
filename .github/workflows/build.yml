@@ -36,7 +36,7 @@ jobs:
         run: pebble build
 
       - name: Install virtual display and emulator dependencies
-        run: sudo apt-get install -y xvfb libsdl2-2.0-0 libsndio7
+        run: sudo apt-get install -y xvfb libsdl2-2.0-0 libsndio7.0
 
       - name: Run on emulator and capture logs
         run: |
