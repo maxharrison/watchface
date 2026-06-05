@@ -2,12 +2,16 @@
 
 // ─── Layout constants ────────────────────────────────────────────────────────
 #define PAD     12
-#define BAR_H    4   // battery bar height
+#define BAR_H    4
 #define TOP_Y   (BAR_H + 6)
-#define STRIP_H 32   // bottom calendar strip
+#define STRIP_H 32
 
-// ─── Colors (initialised in init()) ─────────────────────────────────────────
+// ─── Colors ──────────────────────────────────────────────────────────────────
 static GColor s_orange, s_dim, s_strip, s_green, s_yellow, s_red;
+
+// ─── Fonts (cached at window load) ───────────────────────────────────────────
+static GFont s_font_time;
+static GFont s_font_small;
 
 // ─── App state ───────────────────────────────────────────────────────────────
 static Window *s_window;
@@ -19,121 +23,85 @@ static int     s_weather_temp = 0;
 static char    s_weather_cond[8];
 static bool    s_has_weather  = false;
 
-// Static buffers reused every redraw (safe for graphics_draw_text)
 static char s_time_buf[6];   // "HH:MM\0"
 static char s_date_buf[16];  // "wed 03 jun\0"
+static char s_hr_buf[10];    // "72 hr\0" or "-- hr\0"
+static char s_wx_buf[16];    // "18 cldy\0" or "...\0"
 
 static const char * const DAYS[]   = {"sun","mon","tue","wed","thu","fri","sat"};
 static const char * const MONTHS[] = {"jan","feb","mar","apr","may","jun",
                                        "jul","aug","sep","oct","nov","dec"};
-
 #define NEXT_EVENT "15:00 standup"
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Buffer helpers (called by service callbacks, not in draw proc) ───────────
 static void update_time_buffers(struct tm *t) {
     snprintf(s_time_buf, sizeof(s_time_buf), "%02d:%02d", t->tm_hour, t->tm_min);
     snprintf(s_date_buf, sizeof(s_date_buf), "%s %02d %s",
              DAYS[t->tm_wday], t->tm_mday, MONTHS[t->tm_mon]);
 }
 
-// Measure text width so we can butt two differently-coloured spans together
-static int text_width(const char *text, GFont font) {
-    GSize sz = graphics_text_layout_get_content_size(
-        text, font, GRect(0, 0, 200, 40),
-        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
-    return sz.w;
+static void update_hr_buf(void) {
+    if (s_heart_rate > 0)
+        snprintf(s_hr_buf, sizeof(s_hr_buf), "%d hr", (int)s_heart_rate);
+    else
+        snprintf(s_hr_buf, sizeof(s_hr_buf), "-- hr");
+}
+
+static void update_wx_buf(void) {
+    if (s_has_weather)
+        snprintf(s_wx_buf, sizeof(s_wx_buf), "%d %s", s_weather_temp, s_weather_cond);
+    else
+        snprintf(s_wx_buf, sizeof(s_wx_buf), "...");
 }
 
 // ─── Canvas draw proc ────────────────────────────────────────────────────────
 static void canvas_update_proc(Layer *layer, GContext *ctx) {
-    GRect bounds  = layer_get_bounds(layer);
+    GRect bounds = layer_get_bounds(layer);
     int W = bounds.size.w;
     int H = bounds.size.h;
 
-    GFont f_time  = fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD);
-    GFont f_small = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
-
-    // ── Background ──────────────────────────────────────────────────────────
+    // Background
     graphics_context_set_fill_color(ctx, GColorBlack);
     graphics_fill_rect(ctx, bounds, 0, GCornerNone);
 
-    // ── Battery bar ─────────────────────────────────────────────────────────
+    // Battery bar (top 4 px, proportional width, colour-coded)
     GColor bar_col = (s_battery_pct <= 20) ? s_red :
                      (s_battery_pct <= 40) ? s_yellow : s_green;
     graphics_context_set_fill_color(ctx, bar_col);
     graphics_fill_rect(ctx, GRect(0, 0, ((int)s_battery_pct * W) / 100, BAR_H),
                        0, GCornerNone);
 
-    // ── Heart rate: value (orange) + " hr" (dim) ────────────────────────────
-    char hr_val[8];
-    snprintf(hr_val, sizeof(hr_val), "%s",
-             s_heart_rate > 0 ? "" : "--");
-    if (s_heart_rate > 0)
-        snprintf(hr_val, sizeof(hr_val), "%d", (int)s_heart_rate);
-
-    int hr_w = text_width(hr_val, f_small);
+    // Heart rate — left, orange
     graphics_context_set_text_color(ctx, s_orange);
-    graphics_draw_text(ctx, hr_val, f_small,
-                       GRect(PAD, TOP_Y, hr_w + 2, 24),
+    graphics_draw_text(ctx, s_hr_buf, s_font_small,
+                       GRect(PAD, TOP_Y, 90, 24),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
+    // Weather — right, dim
     graphics_context_set_text_color(ctx, s_dim);
-    graphics_draw_text(ctx, " hr", f_small,
-                       GRect(PAD + hr_w, TOP_Y, 36, 24),
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    graphics_draw_text(ctx, s_wx_buf, s_font_small,
+                       GRect(W / 2, TOP_Y, W / 2 - PAD, 24),
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 
-    // ── Weather: temp (white) + " cond" (dim), right-aligned ────────────────
-    if (s_has_weather) {
-        char cond_str[10];
-        snprintf(cond_str, sizeof(cond_str), " %s", s_weather_cond);
-        int cond_w = text_width(cond_str, f_small);
-        int cond_x = W - PAD - cond_w;
-
-        char temp_str[8];
-        // degree sign: UTF-8 U+00B0 = 0xC2 0xB0
-        snprintf(temp_str, sizeof(temp_str), "%d\xc2\xb0", s_weather_temp);
-        int temp_w = text_width(temp_str, f_small);
-        int temp_x = cond_x - temp_w;
-
-        graphics_context_set_text_color(ctx, GColorWhite);
-        graphics_draw_text(ctx, temp_str, f_small,
-                           GRect(temp_x, TOP_Y, temp_w + 2, 24),
-                           GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-
-        graphics_context_set_text_color(ctx, s_dim);
-        graphics_draw_text(ctx, cond_str, f_small,
-                           GRect(cond_x, TOP_Y, cond_w + 2, 24),
-                           GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-    } else {
-        graphics_context_set_text_color(ctx, s_dim);
-        graphics_draw_text(ctx, "...", f_small,
-                           GRect(0, TOP_Y, W - PAD, 24),
-                           GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
-    }
-
-    // ── Time (large, centered at ~44% down) ─────────────────────────────────
-    //  BITHAM_42_BOLD renders about 50px tall including leading; give it 58px.
-    int center_y = (H * 44) / 100;
-    int time_box_h = 58;
-    int time_y = center_y - time_box_h / 2 - 8;
-
+    // Time — large, centred at ~44% down
+    int time_h = 58;
+    int time_y = (H * 44) / 100 - time_h / 2 - 8;
     graphics_context_set_text_color(ctx, GColorWhite);
-    graphics_draw_text(ctx, s_time_buf, f_time,
-                       GRect(0, time_y, W, time_box_h),
+    graphics_draw_text(ctx, s_time_buf, s_font_time,
+                       GRect(0, time_y, W, time_h),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-    // ── Date (below time) ───────────────────────────────────────────────────
+    // Date — below time, dim
     graphics_context_set_text_color(ctx, s_dim);
-    graphics_draw_text(ctx, s_date_buf, f_small,
-                       GRect(0, time_y + time_box_h + 4, W, 24),
+    graphics_draw_text(ctx, s_date_buf, s_font_small,
+                       GRect(0, time_y + time_h + 4, W, 24),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-    // ── Bottom strip ─────────────────────────────────────────────────────────
+    // Bottom strip
     graphics_context_set_fill_color(ctx, s_strip);
     graphics_fill_rect(ctx, GRect(0, H - STRIP_H, W, STRIP_H), 0, GCornerNone);
-
     graphics_context_set_text_color(ctx, s_orange);
-    graphics_draw_text(ctx, NEXT_EVENT, f_small,
+    graphics_draw_text(ctx, NEXT_EVENT, s_font_small,
                        GRect(PAD, H - STRIP_H + 7, W - PAD * 2, 24),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
@@ -154,6 +122,7 @@ static void health_handler(HealthEventType event, void *context) {
     if (event == HealthEventHeartRateUpdate || event == HealthEventSignificantUpdate) {
         HealthValue hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
         s_heart_rate = (hr > 0) ? (int32_t)hr : 0;
+        update_hr_buf();
         layer_mark_dirty(s_canvas);
     }
 }
@@ -167,25 +136,39 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
         snprintf(s_weather_cond, sizeof(s_weather_cond), "%s", cond_t->value->cstring);
         s_has_weather = true;
     }
-    if (temp_t || cond_t) layer_mark_dirty(s_canvas);
+    if (temp_t || cond_t) {
+        update_wx_buf();
+        layer_mark_dirty(s_canvas);
+    }
 }
 
 // ─── Window lifecycle ─────────────────────────────────────────────────────────
 
 static void window_load(Window *window) {
+    // Cache fonts once — never call fonts_get_system_font in the draw proc
+    s_font_time  = fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD);
+    s_font_small = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
+
     Layer *root = window_get_root_layer(window);
     s_canvas = layer_create(layer_get_bounds(root));
     layer_set_update_proc(s_canvas, canvas_update_proc);
     layer_add_child(root, s_canvas);
 
-    // Seed initial values so first frame looks right
+    // Seed all display buffers before the first draw
     time_t now = time(NULL);
     update_time_buffers(localtime(&now));
 
     s_battery_pct = battery_state_service_peek().charge_percent;
 
-    HealthValue hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
-    s_heart_rate = (hr > 0) ? (int32_t)hr : 0;
+    // Health peek — guard with accessibility check
+    HealthServiceAccessibilityMask mask =
+        health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
+    if (mask & HealthServiceAccessibilityMaskAvailable) {
+        HealthValue hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
+        s_heart_rate = (hr > 0) ? (int32_t)hr : 0;
+    }
+    update_hr_buf();
+    update_wx_buf();
 }
 
 static void window_unload(Window *window) {
