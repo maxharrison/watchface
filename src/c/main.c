@@ -185,7 +185,7 @@ static void window_load(Window *window) {
     s_battery_pct = battery_state_service_peek().charge_percent;
 
     HealthValue hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
-    s_heart_rate = (hr == HEALTH_VALUE_INVALID) ? 0 : (int32_t)hr;
+    s_heart_rate = (hr > 0) ? (int32_t)hr : 0;
 }
 
 static void window_unload(Window *window) {
