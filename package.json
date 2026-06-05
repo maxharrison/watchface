@@ -1,8 +1,5 @@
 {
     "author": "Max Harrison",
-    "dependencies": {
-        "@moddable/pebbleproxy": "^0.1.8"
-    },
     "keywords": [
         "pebble-app"
     ],
@@ -10,25 +7,24 @@
     "pebble": {
         "capabilities": [
             "location",
-            "configurable",
             "health"
         ],
         "displayName": "Watchface",
-        "enableMultiJS": true,
-        "messageKeys": ["HEART_RATE_BPM"],
-        "projectType": "moddable",
+        "messageKeys": [
+            "WEATHER_TEMP_C",
+            "WEATHER_COND"
+        ],
         "resources": {
             "media": []
         },
         "sdkVersion": "3",
         "targetPlatforms": [
-            "emery",
-            "gabbro"
+            "emery"
         ],
         "uuid": "43c191cd-9c42-43d7-8180-61355ad7da70",
         "watchapp": {
             "watchface": true
         }
     },
-    "version": "1.0.2"
+    "version": "1.0.3"
 }
