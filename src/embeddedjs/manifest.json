@@ -3,6 +3,7 @@
 		"$(MODDABLE)/examples/manifest_mod.json"
 	],
 	"modules": {
-		"*": "./main.js"
+		"*": "./main.js",
+		"embedded:sensor/Health": "./pebble-health"
 	}
 }

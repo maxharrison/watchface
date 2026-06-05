@@ -1,5 +1,6 @@
 import Poco from "commodetto/Poco";
 import Battery from "embedded:sensor/Battery";
+import Health from "embedded:sensor/Health";
 import Location from "embedded:sensor/Location";
 
 const render = new Poco(screen);
@@ -30,6 +31,17 @@ let heartRate = 0;
 let weather = null;
 
 const NEXT_EVENT = "15:00 standup"; // calendar placeholder
+
+// ---- Heart rate (live via native XS module) ----
+const health = new Health({
+    onSample() {
+        const s = this.sample();
+        if (s) heartRate = s.heartRate ?? 0;
+        drawScreen();
+    }
+});
+const _initHr = health.sample();
+if (_initHr) heartRate = _initHr.heartRate ?? 0;
 
 // ---- Battery (live) ----
 const battery = new Battery({
