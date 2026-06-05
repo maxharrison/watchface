@@ -153,7 +153,7 @@ static void battery_handler(BatteryChargeState state) {
 static void health_handler(HealthEventType event, void *context) {
     if (event == HealthEventHeartRateUpdate || event == HealthEventSignificantUpdate) {
         HealthValue hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
-        s_heart_rate = (hr == HEALTH_VALUE_INVALID) ? 0 : (int32_t)hr;
+        s_heart_rate = (hr > 0) ? (int32_t)hr : 0;
         layer_mark_dirty(s_canvas);
     }
 }
