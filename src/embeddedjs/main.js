@@ -1,6 +1,5 @@
 import Poco from "commodetto/Poco";
 import Battery from "embedded:sensor/Battery";
-import Health from "embedded:sensor/Health";
 import Location from "embedded:sensor/Location";
 
 const render = new Poco(screen);
@@ -41,14 +40,6 @@ const battery = new Battery({
 });
 batteryPercent = battery.sample().percent;
 
-// ---- Heart rate (live) ----
-const health = new Health({
-    onSample() {
-        heartRate = this.sample().heartRate ?? 0;
-        drawScreen();
-    }
-});
-heartRate = health.sample().heartRate ?? 0;
 
 // ---- Drawing ----
 function drawScreen(event) {
