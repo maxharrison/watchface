@@ -12,7 +12,8 @@
         "displayName": "Watchface",
         "messageKeys": [
             "WEATHER_TEMP_C",
-            "WEATHER_COND"
+            "WEATHER_COND",
+            "CAL_EVENT"
         ],
         "resources": {
             "media": []

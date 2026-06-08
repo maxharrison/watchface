@@ -27,11 +27,11 @@ static char s_time_buf[6];   // "HH:MM\0"
 static char s_date_buf[16];  // "wed 03 jun\0"
 static char s_hr_buf[10];    // "72 hr\0" or "-- hr\0"
 static char s_wx_buf[16];    // "18 cldy\0" or "...\0"
+static char s_event_buf[32]; // "15:00 standup\0" — next calendar event, from pkjs
 
 static const char * const DAYS[]   = {"sun","mon","tue","wed","thu","fri","sat"};
 static const char * const MONTHS[] = {"jan","feb","mar","apr","may","jun",
                                        "jul","aug","sep","oct","nov","dec"};
-#define NEXT_EVENT "15:00 standup"
 
 // ─── Buffer helpers (called by service callbacks, not in draw proc) ───────────
 static void update_time_buffers(struct tm *t) {
@@ -122,7 +122,7 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     graphics_context_set_fill_color(ctx, s_strip);
     graphics_fill_rect(ctx, GRect(0, H - STRIP_H, W, STRIP_H), 0, GCornerNone);
     graphics_context_set_text_color(ctx, s_orange);
-    graphics_draw_text(ctx, NEXT_EVENT, s_font_small,
+    graphics_draw_text(ctx, s_event_buf, s_font_small,
                        GRect(PAD, H - STRIP_H + 7, W - PAD * 2, 24),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
@@ -145,6 +145,8 @@ static void battery_handler(BatteryChargeState state) {
 }
 
 static void inbox_received(DictionaryIterator *iter, void *context) {
+    bool dirty = false;
+
     Tuple *temp_t = dict_find(iter, MESSAGE_KEY_WEATHER_TEMP_C);
     Tuple *cond_t = dict_find(iter, MESSAGE_KEY_WEATHER_COND);
 
@@ -153,9 +155,17 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
         snprintf(s_weather_cond, sizeof(s_weather_cond), "%s", cond_t->value->cstring);
         s_has_weather = true;
     }
-    if ((temp_t || cond_t) && update_wx_buf()) {
-        layer_mark_dirty(s_canvas);
+    if ((temp_t || cond_t) && update_wx_buf()) dirty = true;
+
+    // Next calendar event — pkjs sends a pre-formatted "HH:MM summary" label
+    // (computed on the home server from Radicale), so the watch stays dumb.
+    Tuple *cal_t = dict_find(iter, MESSAGE_KEY_CAL_EVENT);
+    if (cal_t && strncmp(s_event_buf, cal_t->value->cstring, sizeof(s_event_buf)) != 0) {
+        snprintf(s_event_buf, sizeof(s_event_buf), "%s", cal_t->value->cstring);
+        dirty = true;
     }
+
+    if (dirty) layer_mark_dirty(s_canvas);
 }
 
 // ─── Window lifecycle ─────────────────────────────────────────────────────────
@@ -178,6 +188,7 @@ static void window_load(Window *window) {
 
     peek_heart_rate();
     update_wx_buf();
+    snprintf(s_event_buf, sizeof(s_event_buf), "...");  // until pkjs delivers the event
 }
 
 static void window_unload(Window *window) {
@@ -208,7 +219,7 @@ static void init(void) {
     // instead, which avoids redundant redraws and keeps the HRM at its low-power rate.
 
     app_message_register_inbox_received(inbox_received);
-    app_message_open(128, 64);
+    app_message_open(256, 64);  // larger inbox: weather + calendar event string
 }
 
 static void deinit(void) {
