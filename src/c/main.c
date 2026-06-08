@@ -47,11 +47,32 @@ static void update_hr_buf(void) {
         snprintf(s_hr_buf, sizeof(s_hr_buf), "-- hr");
 }
 
-static void update_wx_buf(void) {
+// Read the latest heart rate the system already has. We don't subscribe to
+// HealthEventHeartRateUpdate — peeking once per minute (driven by the tick) is
+// plenty for a watchface and avoids redundant full-screen redraws. We also never
+// request a faster sample period: the system's adaptive default (~10 min) is the
+// battery-friendly choice.
+static void peek_heart_rate(void) {
+    HealthServiceAccessibilityMask mask =
+        health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
+    if (mask & HealthServiceAccessibilityMaskAvailable) {
+        HealthValue hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
+        s_heart_rate = (hr > 0) ? (int32_t)hr : 0;
+    } else {
+        s_heart_rate = 0;
+    }
+    update_hr_buf();
+}
+
+// Returns true if the rendered string changed, so callers can skip a redraw.
+static bool update_wx_buf(void) {
+    char prev[sizeof(s_wx_buf)];
+    strncpy(prev, s_wx_buf, sizeof(prev));
     if (s_has_weather)
         snprintf(s_wx_buf, sizeof(s_wx_buf), "%d %s", s_weather_temp, s_weather_cond);
     else
         snprintf(s_wx_buf, sizeof(s_wx_buf), "...");
+    return strncmp(prev, s_wx_buf, sizeof(prev)) != 0;
 }
 
 // ─── Canvas draw proc ────────────────────────────────────────────────────────
@@ -109,22 +130,18 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
 // ─── Service callbacks ────────────────────────────────────────────────────────
 
 static void tick_handler(struct tm *tick_time, TimeUnits units) {
+    // The minute already changed, so a redraw is happening regardless — refresh
+    // the heart rate here too rather than maintaining a separate sensor subscription.
     update_time_buffers(tick_time);
+    peek_heart_rate();
     layer_mark_dirty(s_canvas);
 }
 
 static void battery_handler(BatteryChargeState state) {
+    // Battery events also fire on plug/unplug; only redraw if the bar changes.
+    if (state.charge_percent == s_battery_pct) return;
     s_battery_pct = state.charge_percent;
     layer_mark_dirty(s_canvas);
-}
-
-static void health_handler(HealthEventType event, void *context) {
-    if (event == HealthEventHeartRateUpdate || event == HealthEventSignificantUpdate) {
-        HealthValue hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
-        s_heart_rate = (hr > 0) ? (int32_t)hr : 0;
-        update_hr_buf();
-        layer_mark_dirty(s_canvas);
-    }
 }
 
 static void inbox_received(DictionaryIterator *iter, void *context) {
@@ -136,8 +153,7 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
         snprintf(s_weather_cond, sizeof(s_weather_cond), "%s", cond_t->value->cstring);
         s_has_weather = true;
     }
-    if (temp_t || cond_t) {
-        update_wx_buf();
+    if ((temp_t || cond_t) && update_wx_buf()) {
         layer_mark_dirty(s_canvas);
     }
 }
@@ -160,14 +176,7 @@ static void window_load(Window *window) {
 
     s_battery_pct = battery_state_service_peek().charge_percent;
 
-    // Health peek — guard with accessibility check
-    HealthServiceAccessibilityMask mask =
-        health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
-    if (mask & HealthServiceAccessibilityMaskAvailable) {
-        HealthValue hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
-        s_heart_rate = (hr > 0) ? (int32_t)hr : 0;
-    }
-    update_hr_buf();
+    peek_heart_rate();
     update_wx_buf();
 }
 
@@ -195,7 +204,8 @@ static void init(void) {
 
     tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
     battery_state_service_subscribe(battery_handler);
-    health_service_events_subscribe(health_handler, NULL);
+    // No health_service_events_subscribe: heart rate is peeked on each minute tick
+    // instead, which avoids redundant redraws and keeps the HRM at its low-power rate.
 
     app_message_register_inbox_received(inbox_received);
     app_message_open(128, 64);
@@ -204,7 +214,8 @@ static void init(void) {
 static void deinit(void) {
     tick_timer_service_unsubscribe();
     battery_state_service_unsubscribe();
-    health_service_events_unsubscribe();
+    // Defensive: ensure we leave the HRM at the system default rate on exit.
+    health_service_set_heart_rate_sample_period(0);
     window_destroy(s_window);
 }
 
