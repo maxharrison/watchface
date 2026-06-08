@@ -35,6 +35,50 @@ function fetchWeather(lat, lon) {
   xhr.send();
 }
 
+// ── Next calendar event ──────────────────────────────────────────────────────
+// The watch has no calendar API, so we fetch the next event from a tiny HTTP
+// endpoint on the home server. That endpoint reuses the existing Radicale MCP
+// server's client (getCalClient / parseVEvent / expandRruleOccurrences) — see
+// the server snippet in the PR description — and returns just:
+//   { "event": { "summary": "standup", "start": "2026-06-08T15:00:00Z" } }
+// or { "event": null } when nothing is upcoming.
+//
+// Reachable over Tailscale. Expose it with `tailscale serve` so the MagicDNS
+// name gets a real Let's Encrypt cert (the pkjs sandbox rejects self-signed),
+// and so it stays tailnet-only (no app-level auth needed).
+var CAL_ENDPOINT   = 'https://YOUR-HOST.YOUR-TAILNET.ts.net/next-event.json';
+var CAL_REFRESH_MS = 15 * 60 * 1000;  // re-poll every 15 min while the face is up
+
+function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+function fetchNextEvent() {
+  var xhr = new XMLHttpRequest();
+  xhr.onload = function() {
+    try {
+      var data = JSON.parse(this.responseText);
+      var label;
+      if (data && data.event) {
+        var d = new Date(data.event.start);
+        label = pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ' ' + data.event.summary;
+      } else {
+        label = 'no events';
+      }
+      // The watch strip fits ~31 chars; trim so it can't overflow the C buffer.
+      label = label.substring(0, 31);
+      Pebble.sendAppMessage(
+        { 'CAL_EVENT': label },
+        function() { console.log('Calendar sent: ' + label); },
+        function(e) { console.log('Calendar send error: ' + JSON.stringify(e)); }
+      );
+    } catch (e) {
+      console.log('Calendar parse error: ' + e);
+    }
+  };
+  xhr.onerror = function() { console.log('Calendar fetch error'); };
+  xhr.open('GET', CAL_ENDPOINT);
+  xhr.send();
+}
+
 Pebble.addEventListener('ready', function() {
   navigator.geolocation.getCurrentPosition(
     function(pos) {
@@ -45,4 +89,7 @@ Pebble.addEventListener('ready', function() {
     },
     { timeout: 15000, maximumAge: 300000 }
   );
+
+  fetchNextEvent();
+  setInterval(fetchNextEvent, CAL_REFRESH_MS);
 });
