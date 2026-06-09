@@ -2,12 +2,16 @@
 
 // ─── Layout constants ────────────────────────────────────────────────────────
 #define PAD     12
-#define BAR_H    4
-#define TOP_Y   (BAR_H + 6)
-#define STRIP_H 32
+#define BAR_H    7        // thicker, bolder battery bar
+#define TOP_Y   (BAR_H + 7)
+#define STRIP_H 34
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
-static GColor s_orange, s_dim, s_strip, s_green, s_yellow, s_red;
+// s_orange  – heart-rate accent
+// s_cyan    – weather accent (own colour, no longer dim grey)
+// s_date    – brighter near-white grey for the date (readability)
+// s_strip   – bottom event band (solid colour block)
+static GColor s_orange, s_cyan, s_date, s_strip, s_green, s_yellow, s_red;
 
 // ─── Fonts (cached at window load) ───────────────────────────────────────────
 static GFont s_font_time;
@@ -85,7 +89,7 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     graphics_context_set_fill_color(ctx, GColorBlack);
     graphics_fill_rect(ctx, bounds, 0, GCornerNone);
 
-    // Battery bar (top 4 px, proportional width, colour-coded)
+    // Battery bar (top BAR_H px, proportional width, colour-coded)
     GColor bar_col = (s_battery_pct <= 20) ? s_red :
                      (s_battery_pct <= 40) ? s_yellow : s_green;
     graphics_context_set_fill_color(ctx, bar_col);
@@ -98,32 +102,32 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
                        GRect(PAD, TOP_Y, 90, 24),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
-    // Weather — right, dim
-    graphics_context_set_text_color(ctx, s_dim);
+    // Weather — right, cyan accent (own colour, higher contrast than grey)
+    graphics_context_set_text_color(ctx, s_cyan);
     graphics_draw_text(ctx, s_wx_buf, s_font_small,
                        GRect(W / 2, TOP_Y, W / 2 - PAD, 24),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 
-    // Time — large, centred at ~44% down
-    int time_h = 58;
+    // Time — enormous, centred at ~44% down. The 49px font needs a taller box.
+    int time_h = 56;
     int time_y = (H * 44) / 100 - time_h / 2 - 8;
     graphics_context_set_text_color(ctx, GColorWhite);
     graphics_draw_text(ctx, s_time_buf, s_font_time,
                        GRect(0, time_y, W, time_h),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-    // Date — below time, dim
-    graphics_context_set_text_color(ctx, s_dim);
+    // Date — below time, brighter grey for glanceability
+    graphics_context_set_text_color(ctx, s_date);
     graphics_draw_text(ctx, s_date_buf, s_font_small,
-                       GRect(0, time_y + time_h + 4, W, 24),
+                       GRect(0, time_y + time_h + 2, W, 24),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-    // Bottom strip
+    // Bottom strip — solid orange colour block, black text
     graphics_context_set_fill_color(ctx, s_strip);
     graphics_fill_rect(ctx, GRect(0, H - STRIP_H, W, STRIP_H), 0, GCornerNone);
-    graphics_context_set_text_color(ctx, s_orange);
+    graphics_context_set_text_color(ctx, GColorBlack);
     graphics_draw_text(ctx, NEXT_EVENT, s_font_small,
-                       GRect(PAD, H - STRIP_H + 7, W - PAD * 2, 24),
+                       GRect(PAD, H - STRIP_H + 8, W - PAD * 2, 24),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
 
@@ -162,7 +166,8 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
 
 static void window_load(Window *window) {
     // Cache fonts once — never call fonts_get_system_font in the draw proc
-    s_font_time  = fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD);
+    // Enormous numeric time font (49px, time glyphs only — exactly "HH:MM").
+    s_font_time  = fonts_get_system_font(FONT_KEY_ROBOTO_BOLD_SUBSET_49);
     s_font_small = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
 
     Layer *root = window_get_root_layer(window);
@@ -188,8 +193,9 @@ static void window_unload(Window *window) {
 
 static void init(void) {
     s_orange = GColorFromRGB(255, 170,   0);
-    s_dim    = GColorFromRGB(138, 138, 138);
-    s_strip  = GColorFromRGB( 20,  20,  20);
+    s_cyan   = GColorFromRGB(  0, 200, 255);  // weather accent (was dim grey)
+    s_date   = GColorFromRGB(200, 200, 200);  // brighter date for readability
+    s_strip  = GColorFromRGB(255, 170,   0);  // solid orange event band
     s_green  = GColorFromRGB(  0, 210, 106);
     s_yellow = GColorFromRGB(255, 170,   0);
     s_red    = GColorRed;
